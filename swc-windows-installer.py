@@ -5,6 +5,7 @@
 Helps mimic a *nix environment on Windows with as little work as possible.
 
 The script:
+* Installs msysGit
 * Installs nano and makes it accessible from msysGit
 * Installs SQLite and makes it accessible from msysGit
 * Creates a ~/nano.rc with links to syntax highlighting configs
@@ -16,11 +17,9 @@ To use:
 1. Install Python, IPython, and Nose.  An easy way to do this is with
    the Anaconda Python distribution
    http://continuum.io/downloads
-2. Install msysGit
-   https://github.com/msysgit/msysgit/releases
-3. Install R (if your workshop uses R)
+2. Install R (if your workshop uses R)
    http://cran.r-project.org/bin/windows/base/rw-FAQ.html#Installation-and-Usage
-4. Run swc-windows-installer.py.
+3. Run swc-windows-installer.py.
    You should be able to simply double click the file in Windows
 
 """
@@ -34,8 +33,10 @@ except ImportError:  # Python 2
 import logging
 import os
 import re
+import subprocess
 import sys
 import tarfile
+import tempfile
 try:  # Python 3
     from urllib.request import urlopen as _urlopen
 except ImportError:  # Python 2
@@ -43,7 +44,7 @@ except ImportError:  # Python 2
 import zipfile
 
 
-__version__ = '0.1'
+__version__ = '0.2'
 
 LOG = logging.getLogger('swc-windows-installer')
 LOG.addHandler(logging.StreamHandler())
@@ -141,6 +142,36 @@ def zip_install(url, sha1, install_directory):
         zip_file.extractall(install_directory)
     else:
         LOG.info('existing installation at {}'.format(install_directory))
+
+
+def install_msysgit(
+        components=(
+            'icons',  # Additional icons
+            r'icons\quicklaunch',  # In the Quick Launch
+            r'icons\desktop',  # On the Desktop
+            'ext',  # Windows Explorer integration
+            r'ext\reg',  # Simple context menu (Registry based)
+            r'ext\reg\shellhere',  # Git Bash Here
+            r'ext\reg\guihere',  # Git GUI Here
+            #r'ext\cheetah',  # Advanced context menu (git-cheetah plugin)
+            'assoc',  # Associate .git* configuration files with the default text editor
+            'assoc_sh',  # Associate .sh files to be run with Bash
+            #'consolefont',  # Use a TrueType font in all console windows (not only for Git Bash)
+        )):
+    url = 'https://github.com/msysgit/msysgit/releases/download/Git-1.9.4-preview20140815/msysGit-netinstall-1.9.4-preview20140815.exe'
+    exe_bytes = download(
+        url=url, sha1='c2cb700839fdcea79b5401f046878de711628ccc')
+    LOG.info('installing {}'.format(url))
+    with tempfile.NamedTemporaryFile(prefix='git-', suffix='.exe') as f:
+        f.write(exe_bytes)
+        f.flush()
+        p = subprocess.Popen(
+            ['cmd', f.name, '/SILENT',
+             r'/COMPONENTS={}'.format(','.join(components))])
+        status = p.wait()
+        if status:
+            raise RuntimeError(
+                'msysGit installation exited with {}'.format(status))
 
 
 def install_nano(install_directory):
@@ -264,6 +295,7 @@ def main():
     nano_dir = os.path.join(swc_dir, 'lib', 'nano')
     nanorc_dir = os.path.join(swc_dir, 'share', 'nanorc')
     sqlite_dir = os.path.join(swc_dir, 'lib', 'sqlite')
+    install_msysgit()
     create_nosetests_entry_point(python_scripts_directory=bin_dir)
     install_nano(install_directory=nano_dir)
     install_nanorc(install_directory=nanorc_dir)
