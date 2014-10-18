@@ -6,10 +6,10 @@ Helps mimic a *nix environment on Windows with as little work as possible.
 
 The script:
 * Installs nano and makes it accessible from msysGit
-* Installs sqlite3 and makes it accessible from msysGit
-* Creates ~/nano.rc with links to syntax highlighting configs
+* Installs SQLite and makes it accessible from msysGit
+* Creates a ~/nano.rc with links to syntax highlighting configs
 * Provides standard nosetests behavior for msysGit
-* Add R's bin directory to the path (if we can find it)
+* Adds R's bin directory to the path (if we can find it)
 
 To use:
 
@@ -18,7 +18,7 @@ To use:
    http://continuum.io/anacondace.html
 2. Install msysGit
    https://github.com/msysgit/msysgit/releases
-3. Run swc_windows_installer.py
+3. Run swc-windows-installer.py.
    You should be able to simply double click the file in Windows
 
 """
@@ -41,9 +41,11 @@ except ImportError:  # Python 2
 import zipfile
 
 
+__version__ = '0.1'
+
 LOG = logging.getLogger('swc-windows-installer')
 LOG.addHandler(logging.StreamHandler())
-LOG.setLevel(logging.ERROR)
+LOG.setLevel(logging.INFO)
 
 
 if sys.version_info >= (3, 0):  # Python 3
@@ -169,7 +171,7 @@ def install_nanorc(install_directory):
 
 
 def install_sqlite(install_directory):
-    """Download and install the sqlite3 shell"""
+    """Download and install the SQLite shell"""
     zip_install(
         url='https://sqlite.org/2014/sqlite-shell-win32-x86-3080403.zip',
         sha1='1a8ab0ca9f4c51afeffeb49bd301e1d7f64741bb',
@@ -197,15 +199,19 @@ def create_nosetests_entry_point(python_scripts_directory):
 def get_r_bin_directory():
     """Locate the R bin directory (if R is installed
     """
-    pf = os.environ.get('ProgramFiles', r'c:\ProgramFiles')
-    bin_glob = os.path.join(pf, 'R', 'R-[0-9]*.[0-9]*.[0-9]*', 'bin')
     version_re = re.compile('^R-(\d+)[.](\d+)[.](\d+)$')
     paths = {}
-    for path in glob.glob(bin_glob):
-        version_dir = os.path.basename(os.path.dirname(path))
-        version_match = version_re.match(version_dir)
-        if version_match:
-            paths[version_match.groups()] = path
+    for pf in [
+            os.environ.get('ProgramW6432', r'c:\Program Files'),
+            os.environ.get('ProgramFiles', r'c:\Program Files'),
+            os.environ.get('ProgramFiles(x86)', r'c:\Program Files(x86)'),
+            ]:
+        bin_glob = os.path.join(pf, 'R', 'R-[0-9]*.[0-9]*.[0-9]*', 'bin')
+        for path in glob.glob(bin_glob):
+            version_dir = os.path.basename(os.path.dirname(path))
+            version_match = version_re.match(version_dir)
+            if version_match and version_match.groups() not in paths:
+                paths[version_match.groups()] = path
     if not paths:
         LOG.info('no R installation found under {}'.format(pf))
         return
@@ -274,8 +280,13 @@ if __name__ == '__main__':
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
-        '-v', '--verbose', choices=['info', 'debug'],
-        help='Verbosity')
+        '-v', '--verbose',
+        choices=['critical', 'error', 'warning', 'info', 'debug'],
+        help='Verbosity (defaults to {!r})'.format(
+            logging.getLevelName(LOG.level).lower()))
+    parser.add_argument(
+        '--version', action='version',
+        version='%(prog)s {}'.format(__version__))
 
     args = parser.parse_args()
 
@@ -284,5 +295,6 @@ if __name__ == '__main__':
         LOG.setLevel(level)
 
     LOG.info('Preparing your Software Carpentry awesomeness!')
+    LOG.info('installer version {}'.format(__version__))
     main()
     LOG.info('Installation complete.')
